@@ -22,7 +22,7 @@ namespace ShopService.Domain.Entities
         public string PaymentMethod { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
-        public Guid CouponId { get; set; }
+        public Guid? CouponId { get; set; }
         public string? PaymentIntentId { get; set; }
         public string? TrackingNumber { get; set; }
         public string? Notes { get; set; }

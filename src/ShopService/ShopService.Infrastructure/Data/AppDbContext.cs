@@ -15,7 +15,6 @@ namespace ShopService.Infrastructure.Data
         public DbSet<Category> Categories { get; set; }
         public DbSet<CartItem> CartItems { get; set; }
         public DbSet<Cart> Carts { get; set; }
-        public DbSet<Address> Addresses { get; set; }
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             var entries = ChangeTracker.Entries()
@@ -97,50 +96,11 @@ namespace ShopService.Infrastructure.Data
                     .HasForeignKey(e => e.UserId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasMany(e => e.Addresses)
-                    .WithOne(e => e.User)
-                    .HasForeignKey(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
                 entity.HasOne(e => e.Cart)
                     .WithOne(e => e.User)
                     .HasForeignKey<Cart>(e => e.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
-
-            // ========================================
-            // ADDRESS CONFIGURATION
-            // ========================================
-            modelBuilder.Entity<Address>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).ValueGeneratedOnAdd();
-
-                entity.Property(e => e.Street)
-                    .IsRequired()
-                    .HasMaxLength(255);
-
-                entity.Property(e => e.City)
-                    .IsRequired()
-                    .HasMaxLength(100);
-
-                entity.Property(e => e.State)
-                    .IsRequired()
-                    .HasMaxLength(100);
-
-                entity.Property(e => e.PostalCode)
-                    .IsRequired()
-                    .HasMaxLength(20);
-
-                entity.Property(e => e.Country)
-                    .IsRequired()
-                    .HasMaxLength(100);
-
-                entity.HasIndex(e => new { e.UserId, e.IsDefault })
-                    .IsUnique()
-                    .HasFilter("\"IsDefault\" = true");
-            });
-
             // ========================================
             // CART CONFIGURATION
             // ========================================

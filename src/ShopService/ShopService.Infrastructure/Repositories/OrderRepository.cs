@@ -74,7 +74,7 @@ namespace ShopService.Infrastructure.Repositories
 
                 if (order.CouponId != Guid.Empty)
                 {
-                    await _couponRepository.DecrementUsedCountAsync(order.CouponId);
+                    await _couponRepository.DecrementUsedCountAsync(order.CouponId.Value);
                 }
 
                 order.OrderStatus = OrderStatus.Cancelled;
@@ -320,7 +320,7 @@ namespace ShopService.Infrastructure.Repositories
 
                 if (order.CouponId != Guid.Empty)
                 {
-                    var incremented = await _couponRepository.TryIncrementUsedCountAsync(order.CouponId);
+                    var incremented = await _couponRepository.TryIncrementUsedCountAsync(order.CouponId.Value);
                     if (!incremented)
                     {
                         throw new InvalidOperationException("Coupon is invalid or has reached its usage limit");
