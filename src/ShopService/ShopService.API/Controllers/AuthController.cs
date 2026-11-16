@@ -150,6 +150,23 @@ namespace ShopService.API.Controllers
 
             return Ok(user);
         }
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<ActionResult<UserResponseDTO?>> GetCurrentUser()
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { Message = "User is not authenticated." });
+            }
+
+            var user = await _authService.GetUserByIdAsync(userId);
+            if (user is null)
+            {
+                return NotFound(new { Message = "User was not found." });
+            }
+
+            return Ok(user);
+        }
 
         [HttpPost("refresh")]
         public async Task<ActionResult> RefreshTokens()

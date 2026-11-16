@@ -13,6 +13,7 @@ namespace ShopService.Application.Interfaces
     {
         Task<TokenResponseDTO?> LogInAsync(UserLoginDTO userLoginDTO);
         Task<UserResponseDTO?> RegisterAsync(UserRegisterDTO userRegisterDTO);
+        Task<UserResponseDTO?> GetUserByIdAsync(Guid userId);
         Task<bool> DeleteUserAsync(Guid guid);
         Task<UserResponseDTO?> UpdateUserAsync(UserUpdateDTO user,Guid guid);
         Task<TokenResponseDTO?> RefreshTokens(string refreshToken);

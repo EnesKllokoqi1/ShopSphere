@@ -14,6 +14,7 @@ namespace ShopService.Application.Interfaces
         Task<User> CreateUser(User user);
         Task<bool> DeleteUser(Guid guid);
         Task SaveChanges();
+        Task<User?> GetUserById(Guid userId);
         Task<User?> CheckUserRefreshToken(string refreshToken);
         Task<User?> UpdateUser(User user, Guid guid);
         Task<User?> CheckEmailVerificationToken(string emailVerificationToken);

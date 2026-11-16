@@ -9,6 +9,7 @@ using ShopService.Domain.Enums;
 using ShopService.Infrastructure.Data;
 using ShopService.Infrastructure.Repositories;
 using System.Text;
+using System.Text.Json.Serialization;
 
 Env.Load();
 var builder = WebApplication.CreateBuilder(args);
@@ -16,7 +17,11 @@ var connectionString =
     Environment.GetEnvironmentVariable("DB_CONNECTION")
     ?? builder.Configuration.GetConnectionString("DefaultConnection");
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
+    });
 builder.Services.AddDbContext<AppDbContext>(op => op.UseNpgsql(connectionString));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();

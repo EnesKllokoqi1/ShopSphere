@@ -246,5 +246,12 @@ namespace ShopService.Application.Service
             await _userRepository.SaveChanges();
             return true;
         }
+
+        public async Task<UserResponseDTO?> GetUserByIdAsync(Guid userId)
+        {
+            var user = await _userRepository.GetUserById(userId);
+            if (user is null) return null;
+            return MapUserDto(user);
+        }
     }
 }

@@ -107,5 +107,10 @@ namespace ShopService.Infrastructure.Repositories
             }
             return user;
         }
+
+        public async Task<User?> GetUserById(Guid userId)
+        {
+            return await _appDbContext.Users.FindAsync(userId);
+        }
     }
 }
