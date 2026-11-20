@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShopService.Application.DTOs.CategoryDTOs;
 using ShopService.Application.Interfaces;
 using ShopService.Domain.Entities;
+using System.Security.Claims;
 
 namespace ShopService.API.Controllers
 {
@@ -16,7 +17,8 @@ namespace ShopService.API.Controllers
         {
             _categoryService = categoryService;
         }
-
+        private Guid? GetCurrentUserId() =>
+           Guid.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : null;
         [Authorize(Policy = "AdminOnly")]
         [HttpPost]
         public async Task<ActionResult<CategoryResponseDTO>> CreateCategory([FromBody] CreateCategoryDTO createCategoryDTO)
@@ -56,7 +58,7 @@ namespace ShopService.API.Controllers
             var check = await _categoryService.DeleteCategory(categoryId);
             if (!check)
             {
-                return NotFound(new { Message= "Category with that Id has not been found" });
+                return NotFound(new { Message= "Category cant be deleted." });
             }
             return NoContent();
         }
@@ -64,6 +66,14 @@ namespace ShopService.API.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CategoryResponseDTO>>> GetAllCategories([FromQuery] int pageNumber = 1, [FromQuery] int pageSize =10)
         {
+            var userId =  GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new
+                {
+                    Message = "Authentication is required"
+                });
+            }
             var categories = await _categoryService.GetAllCategories(pageNumber,pageSize);
             return Ok(categories);
         }
@@ -71,6 +81,14 @@ namespace ShopService.API.Controllers
         [HttpGet("{categoryId:guid}")]
         public async Task<ActionResult<CategoryResponseDTO>> GetCategoryById([FromRoute] Guid categoryId)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new
+                {
+                    Message = "Authentication is required."
+                });
+            }
             var category = await _categoryService.GetCategoryById(categoryId);
             if (category is null)
             {

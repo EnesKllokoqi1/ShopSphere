@@ -60,7 +60,7 @@ namespace ShopService.Application.Service
                 return null;
             }
             var updatedCategory = await _categoryRepository.GetCategoryById(result.Id);
-            return MapCategoryResponseDTO(result);
+            return MapCategoryResponseDTO(updatedCategory);
         }
         private Category MapCategoryFromCreateDTO(CreateCategoryDTO createCategoryDTO)
         {
