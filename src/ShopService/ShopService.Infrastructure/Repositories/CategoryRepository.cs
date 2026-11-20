@@ -24,26 +24,44 @@ namespace ShopService.Infrastructure.Repositories
         }
         public async Task<Category?> CreateCategory(Category category)
         {
-            bool check = await _appDbContext.Categories
-                  .Include(c => c.ParentCategory)
-                  .Include(c => c.SubCategories)
-                  .AnyAsync(e => e.Name == category.Name);
-            if (check)
+            if (category is null) return null;
+
+            var name = category.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(name)) return null;
+
+            bool exists = await _appDbContext.Categories
+                .AnyAsync(e => e.Name.ToLower() == name.ToLower());
+
+            if (exists) return null;
+
+            if (category.ParentCategoryId.HasValue &&
+                !await _appDbContext.Categories.AnyAsync(c => c.Id == category.ParentCategoryId))
             {
                 return null;
             }
-             _appDbContext.Categories.Add(category);
+
+            category.Name = name;
+
+            _appDbContext.Categories.Add(category);
             await _appDbContext.SaveChangesAsync();
             return category;
         }
 
         public async Task<bool> DeleteCategory(Guid categoryId)
         {
-            var category = await GetCategoryById(categoryId);
-            if (category is null)
-            {
-                return false;
-            }
+            var category = await _appDbContext.Categories
+       .FirstOrDefaultAsync(c => c.Id == categoryId);
+
+            if (category is null) return false;
+
+            bool hasChildren = await _appDbContext.Categories
+                .AnyAsync(c => c.ParentCategoryId == categoryId);
+
+            bool hasProducts = await _appDbContext.Products
+                .AnyAsync(p => p.CategoryId == categoryId);
+
+            if (hasChildren || hasProducts) return false;
+
             _appDbContext.Categories.Remove(category);
             await _appDbContext.SaveChangesAsync();
             return true;
@@ -51,16 +69,15 @@ namespace ShopService.Infrastructure.Repositories
 
         public async Task<IEnumerable<CategoryResponseDTO>> GetAllCategories(int pageNumber = 1, int pageSize = 10)
         {
+
             return await _appDbContext.Categories
                 .AsNoTracking()
-                  .Include(c => c.ParentCategory)  
-                  .Include(c => c.SubCategories)
-                  .OrderBy(e => e.CreatedAt)
-                  .ThenBy(e => e.Id)
-                  .Skip((pageNumber - 1) * pageSize)
-                  .Take(pageSize)
-                  .Select(MapToCategoryResponseDTO())
-                  .ToListAsync();
+                .OrderBy(e => e.CreatedAt)
+                .ThenBy(e => e.Id)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(MapToCategoryResponseDTO())
+                .ToListAsync();
         }
 
         private static Expression<Func<Category, CategoryResponseDTO>> MapToCategoryResponseDTO()
@@ -100,25 +117,51 @@ namespace ShopService.Infrastructure.Repositories
 
         public async Task<Category?> UpdateCategory(Category updatedCategory, Guid categoryId)
         {
-            var theCategory = await GetCategoryById(categoryId);
-            if (theCategory is null)
+            if (updatedCategory is null) return null;
+
+            var theCategory = await _appDbContext.Categories
+                .FirstOrDefaultAsync(c => c.Id == categoryId);
+
+            if (theCategory is null) return null;
+
+            var newName = updatedCategory.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(newName)) return null;
+
+            // 1. Can't be its own parent
+            if (updatedCategory.ParentCategoryId == categoryId)
+                return null;
+
+            // 2. Cycle detection: walk up the proposed parent chain
+            var ancestorId = updatedCategory.ParentCategoryId;
+            while (ancestorId.HasValue)
+            {
+                if (ancestorId == categoryId) return null;
+
+                ancestorId = await _appDbContext.Categories
+                    .Where(c => c.Id == ancestorId)
+                    .Select(c => c.ParentCategoryId)
+                    .FirstOrDefaultAsync();
+            }
+            // 3. Parent must exist if provided
+            if (updatedCategory.ParentCategoryId.HasValue &&
+                !await _appDbContext.Categories.AnyAsync(c => c.Id == updatedCategory.ParentCategoryId))
             {
                 return null;
             }
-            if (theCategory.Name != updatedCategory.Name)
+            // 4. Case-insensitive dup check, excluding self
+            if (!string.Equals(theCategory.Name, newName, StringComparison.OrdinalIgnoreCase))
             {
-                bool nameExists = await _appDbContext.Categories.AnyAsync(c => c.Name == updatedCategory.Name);
-                if (nameExists)
-                {
-                    return null;
-                }
-            }
+                bool nameExists = await _appDbContext.Categories
+                    .AnyAsync(c => c.Id != categoryId && c.Name.ToLower() == newName.ToLower());
 
-            theCategory.Name = updatedCategory.Name;
+                if (nameExists) return null;
+            }
+            theCategory.Name = newName;
             theCategory.Description = updatedCategory.Description;
             theCategory.ParentCategoryId = updatedCategory.ParentCategoryId;
             theCategory.DisplayOrder = updatedCategory.DisplayOrder;
             theCategory.IsActive = updatedCategory.IsActive;
+
             await _appDbContext.SaveChangesAsync();
             return theCategory;
         }
