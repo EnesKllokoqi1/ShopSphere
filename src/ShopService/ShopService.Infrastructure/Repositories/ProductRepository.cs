@@ -23,31 +23,43 @@ namespace ShopService.Application.Service
 
         public async Task<bool> AdjustStockAsync(Guid productId, int quantityChange)
         {
-            var product = await GetProductById(productId);
-            if (product is null)
-            {
-                return false;
-            }
-            if (product.StockQuantity + quantityChange < 0) return false;
-            product.StockQuantity += quantityChange;
-            await _appDbContext.SaveChangesAsync();
-            return true;
+            if (quantityChange == 0) return true;
+
+            var now = DateTime.UtcNow;
+
+            var affected = await _appDbContext.Products
+                .Where(p => p.Id == productId && p.StockQuantity + quantityChange >= 0)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(p => p.StockQuantity, p => p.StockQuantity + quantityChange)
+                    .SetProperty(p => p.UpdatedAt, now));
+
+            return affected > 0;
         }
 
         public async Task<Product?> CreateProduct(Product product)
         {
-            if (string.IsNullOrEmpty(product.Slug))
-            {
-                product.Slug = GenerateSlug(product.Name);
-            }
+            if (product is null) return null;
+
+            var name = product.Name?.Trim();
+            var sku = product.Sku?.Trim();
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(sku)) return null;
+
+            var slug = string.IsNullOrEmpty(product.Slug)
+                ? GenerateSlug(name)
+                : product.Slug.Trim();
+
+            if (string.IsNullOrEmpty(slug)) return null;  
 
             bool exists = await _appDbContext.Products
-                .AnyAsync(p => p.Sku == product.Sku || p.Slug == product.Slug || p.Name == product.Name);
+                .AnyAsync(p => p.Sku.ToLower() == sku.ToLower()
+                            || p.Slug.ToLower() == slug.ToLower()
+                            || p.Name.ToLower() == name.ToLower());
 
-            if (exists)
-            {
-                return null;
-            }
+            if (exists) return null;
+
+            product.Name = name;
+            product.Sku = sku;
+            product.Slug = slug;
 
             await _appDbContext.Products.AddAsync(product);
             await _appDbContext.SaveChangesAsync();
@@ -56,11 +68,19 @@ namespace ShopService.Application.Service
 
         public async Task<bool> DeleteProduct(Guid guid)
         {
-            var product = await GetProductById(guid);
-            if (product is null)
-            {
-                return false;
-            }
+            var product = await _appDbContext.Products
+        .FirstOrDefaultAsync(p => p.Id == guid);
+
+            if (product is null) return false;
+
+            bool hasOrderItems = await _appDbContext.OrderItems
+                .AnyAsync(o => o.ProductId == guid);
+
+            bool hasCartItems = await _appDbContext.CartItems
+                .AnyAsync(c => c.ProductId == guid);
+
+            if (hasOrderItems || hasCartItems) return false;
+
             _appDbContext.Products.Remove(product);
             await _appDbContext.SaveChangesAsync();
             return true;
@@ -81,41 +101,39 @@ namespace ShopService.Application.Service
         public async Task<IEnumerable<ProductResponseDTO>> GetFeaturedProducts(int pageNumber = 1, int pageSize = 10)
         {
             return await _appDbContext.Products
-                .Where(e => e.IsFeatured)
-                .OrderBy(e => e.CreatedAt)
-                .ThenBy(e => e.Id)
-                .Skip((pageNumber - 1) * pageSize)
-                  .Take(pageSize)
-                .Select(MapToProductResponseDTO())
-                .ToListAsync();
+                 .AsNoTracking()
+                 .Where(e => e.IsFeatured)
+                 .OrderBy(e => e.CreatedAt)
+                 .ThenBy(e => e.Id)
+                 .Skip((pageNumber - 1) * pageSize)
+                 .Take(pageSize)
+                 .Select(MapToProductResponseDTO())
+                 .ToListAsync();
         }
 
         public async Task<IEnumerable<ProductResponseDTO>> GetLowStockProductsAsync(int pageNumber = 1, int pageSize = 10)
         {
             return await _appDbContext.Products
-                .Where(e => e.StockQuantity <= (e.LowStockThreshold ?? 10))
-                .OrderBy(e => e.CreatedAt)
-                .ThenBy(e => e.Id)
-                  .Skip((pageNumber - 1) * pageSize)
-                  .Take(pageSize)
-                .Select(MapToProductResponseDTO())
-                .ToListAsync();
+     .AsNoTracking()
+     .Where(e => e.StockQuantity <= (e.LowStockThreshold ?? 10))
+     .OrderBy(e => e.CreatedAt)
+     .ThenBy(e => e.Id)
+     .Skip((pageNumber - 1) * pageSize)
+     .Take(pageSize)
+     .Select(MapToProductResponseDTO())
+     .ToListAsync();
         }
 
         public async Task<Product?> GetProductById(Guid productId)
         {
             return await _appDbContext.Products
-                .Include(e=>e.OrderItems)
-                .Include(e=>e.CartItems)
-                .Include(e=>e.Category)
-                .Include(e=>e.Reviews)
-                .FirstOrDefaultAsync(e =>e.Id==productId);
+     .FirstOrDefaultAsync(e => e.Id == productId);
         }
 
         public async Task<IEnumerable<ProductCategoryResponseDTO>> GetProductCategories(int pageNumber = 1, int pageSize = 10)
         {
             return await _appDbContext.Categories
-                .Include(e=>e.Products)
+                 .AsNoTracking()
                 .OrderBy(e => e.CreatedAt)
                 .ThenBy(e => e.Id)
                   .Skip((pageNumber - 1) * pageSize)
@@ -156,7 +174,7 @@ namespace ShopService.Application.Service
         public async Task<IEnumerable<ProductReviewResponseDTO>> GetProductReviews(Guid productId, int pageNumber = 1, int pageSize = 10)
         {
             return await _appDbContext.Reviews
-                .Include(e=>e.Product)
+                  .AsNoTracking()
                 .Where(e => e.ProductId == productId)
                .OrderBy(e => e.CreatedAt)
                .ThenBy(e => e.Id)
@@ -177,21 +195,38 @@ namespace ShopService.Application.Service
 
         public async Task<Product?> UpdateProduct(Product updatedProduct, Guid productId)
         {
-            var product = await GetProductById(productId);
-            if (product is null)
+
+            if (updatedProduct is null) return null;
+
+            var product = await _appDbContext.Products
+                .FirstOrDefaultAsync(p => p.Id == productId);
+
+            if (product is null) return null;
+
+            var newName = updatedProduct.Name?.Trim();
+            var newSku = updatedProduct.Sku?.Trim();
+            if (string.IsNullOrWhiteSpace(newName) || string.IsNullOrWhiteSpace(newSku)) return null;
+
+            if (updatedProduct.CategoryId.HasValue &&
+                !await _appDbContext.Categories.AnyAsync(c => c.Id == updatedProduct.CategoryId))
             {
                 return null;
             }
+            var newSlug = product.Name != newName ? GenerateSlug(newName) : product.Slug;
 
-            if (product.Name != updatedProduct.Name)
-            {
-                product.Slug = GenerateSlug(updatedProduct.Name);
-            }
+            bool exists = await _appDbContext.Products
+                .AnyAsync(p => p.Id != productId &&
+                              (p.Sku.ToLower() == newSku.ToLower()
+                            || p.Slug.ToLower() == newSlug.ToLower()
+                            || p.Name.ToLower() == newName.ToLower()));
 
-            product.Name = updatedProduct.Name;
+            if (exists) return null;
+
+            product.Name = newName;
+            product.Sku = newSku;
+            product.Slug = newSlug;
             product.Description = updatedProduct.Description;
             product.ShortDescription = updatedProduct.ShortDescription;
-            product.Sku = updatedProduct.Sku;
             product.Price = updatedProduct.Price;
             product.CompareAtPrice = updatedProduct.CompareAtPrice;
             product.StockQuantity = updatedProduct.StockQuantity;
@@ -208,8 +243,13 @@ namespace ShopService.Application.Service
 
         private string GenerateSlug(string name)
         {
-            string slug = name.ToLower().Replace(" ", "-").Replace("&", "and");
-            return Regex.Replace(slug, "[^a-z0-9-]", "");
+            var slug = name.Trim().ToLowerInvariant()
+           .Replace("&", " and ")
+            .Replace(" ", "-");
+            slug = Regex.Replace(slug, "[^a-z0-9-]", "");  
+            slug = Regex.Replace(slug, "-+", "-");          
+            slug = slug.Trim('-');                          
+            return slug;
         }
 
         private static Expression<Func<Product, ProductResponseDTO>> MapToProductResponseDTO()

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using ShopService.Application.DTOs.ProductDTOs;
 using ShopService.Application.Interfaces;
+using System.Security.Claims;
 
 namespace ShopService.API.Controllers
 {
@@ -15,10 +16,17 @@ namespace ShopService.API.Controllers
         {
             _productService = productService;
         }
+        private Guid? GetCurrentUserId() =>
+        Guid.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : null;
         [Authorize]
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ProductResponseDTO>>> GetAllProducts([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
             var products = await _productService.GetAllProducts(pageNumber, pageSize);
             return Ok(products);
         }
@@ -26,6 +34,11 @@ namespace ShopService.API.Controllers
         [HttpGet("{productId:guid}")]
         public async Task<ActionResult<ProductResponseDTO>> GetProductById([FromRoute] Guid productId)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
             var product = await _productService.GetSpecificProduct(productId);
             if (product is null)
             {
@@ -38,6 +51,11 @@ namespace ShopService.API.Controllers
         [HttpGet("categories")]
         public async Task<ActionResult<IEnumerable<ProductCategoryResponseDTO>>> GetProductCategories([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
             var categories = await _productService.GetProductCategories(pageNumber,pageSize);
             return Ok(categories);
         }
@@ -45,6 +63,11 @@ namespace ShopService.API.Controllers
         [HttpPost]
         public async Task<ActionResult<ProductResponseDTO>> CreateProduct([FromBody] CreateProductDTO createProductDTO)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
             var createdProduct = await _productService.CreateProduct(createProductDTO);
             if (createdProduct is null)
             {
@@ -61,6 +84,11 @@ namespace ShopService.API.Controllers
         [HttpPut("{productId:guid}")]
         public async Task<ActionResult<ProductResponseDTO>> UpdateProduct([FromRoute] Guid productId, [FromBody] UpdateProductDTO updateProductDTO)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
             var updatedProduct = await _productService.UpdateProductDto(updateProductDTO, productId);
             if (updatedProduct is null)
             {
@@ -73,6 +101,11 @@ namespace ShopService.API.Controllers
         [HttpDelete("{productId:guid}")]
         public async Task<ActionResult> DeleteProduct([FromRoute] Guid productId)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
             var success = await _productService.DeleteProduct(productId);
             if (!success)
             {
@@ -85,10 +118,15 @@ namespace ShopService.API.Controllers
         [HttpPut("{productId:guid}/stock")]
         public async Task<ActionResult> AdjustStock([FromRoute] Guid productId, [FromBody] AdjustStockDTO adjustStockDto)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
             var success = await _productService.AdjustStockAsync(productId, adjustStockDto.QuantityChange);
             if (!success)
             {
-                return NotFound(new { Message = "Product not found." });
+                return NotFound(new { Message = "Unable to adjust stock. Product may not exist, or the adjustment would result in negative stock." });
             }
 
             return Ok(new { Message = "Stock successfully adjusted." });
@@ -97,15 +135,22 @@ namespace ShopService.API.Controllers
         [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<IEnumerable<ProductResponseDTO>>> GetLowStockProducts([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
             var lowStockProducts = await _productService.GetLowStockProductsAsync(pageNumber,pageSize);
             return Ok(lowStockProducts);
         }
+        [AllowAnonymous]
         [HttpGet("featured")]
         public async Task<ActionResult<IEnumerable<ProductResponseDTO>>> GetFeaturedProducts([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             var featuredProducts = await _productService.GetFeaturedProducts(pageNumber, pageSize);
             return Ok(featuredProducts);
         }
+        [AllowAnonymous]
         [HttpGet("{productId:guid}/reviews")]
         public async Task<ActionResult<IEnumerable<ProductReviewResponseDTO>>> GetProductReviews([FromRoute] Guid productId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
