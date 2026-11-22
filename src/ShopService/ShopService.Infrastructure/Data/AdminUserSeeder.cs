@@ -14,7 +14,7 @@ namespace ShopService.Infrastructure.Data
     {
         public static async Task RegisterAdmin(IServiceProvider serviceProvider)
         {
-            var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL");
+            var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL")?.Trim().ToLower();
             var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD");
 
             if (string.IsNullOrEmpty(adminEmail) || string.IsNullOrEmpty(adminPassword))
@@ -34,7 +34,7 @@ namespace ShopService.Infrastructure.Data
                     FirstName = "Super",
                     LastName = "Admin",
                     Age = 18,
-                    EmailAddress = adminEmail,
+                    EmailAddress = adminEmail.Trim().ToLower(),
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
                     Gender = Gender.Male,
                     IsActive = true,
@@ -44,10 +44,14 @@ namespace ShopService.Infrastructure.Data
                 await context.Users.AddAsync(Admin);
                 await context.SaveChangesAsync();
             }
-            else if (existingUser.Role != UserRole.Admin)
+            else 
             {
                 existingUser.Role = UserRole.Admin;
-                existingUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword); 
+                existingUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword);
+                existingUser.IsActive = true;         
+                existingUser.IsEmailVerified = true; 
+                existingUser.EmailVerificationToken = null;        
+                existingUser.EmailVerificationTokenExpiry = null;  
                 await context.SaveChangesAsync();
             }
         }

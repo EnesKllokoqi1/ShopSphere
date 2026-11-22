@@ -40,6 +40,9 @@ namespace ShopService.Application.DTOs.ProductDTOs
 
         public bool IsFeatured { get; set; }
 
+        [Range(0.01, 10000, ErrorMessage = "Weight must be between 0.01 and 10,000.")]
+        public decimal? Weight { get; set; }
+
         [MaxLength(100, ErrorMessage = "Brand name cannot exceed 100 characters.")]
         public string? Brand { get; set; }
 
