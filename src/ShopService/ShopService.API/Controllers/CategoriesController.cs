@@ -23,6 +23,11 @@ namespace ShopService.API.Controllers
         [HttpPost]
         public async Task<ActionResult<CategoryResponseDTO>> CreateCategory([FromBody] CreateCategoryDTO createCategoryDTO)
         {
+            var userId =  GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new {Message ="Authentication is required"});
+            }
             var category = await _categoryService.CreateCategory(createCategoryDTO);
             if (category is null)
             {

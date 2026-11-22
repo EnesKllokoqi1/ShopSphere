@@ -39,6 +39,7 @@ namespace ShopService.Application.Service
                 IsActive = createProductDTO.IsActive,
                 IsFeatured = createProductDTO.IsFeatured,
                 Brand = createProductDTO.Brand,
+                Weight = createProductDTO.Weight,
                 CategoryId = createProductDTO.CategoryId,
             };
             var result = await _productRepository.CreateProduct(product);
@@ -120,6 +121,7 @@ namespace ShopService.Application.Service
                 LowStockThreshold = updateProductDTO.LowStockThreshold,
                 IsActive = updateProductDTO.IsActive,
                 IsFeatured = updateProductDTO.IsFeatured,
+                Weight = updateProductDTO.Weight,
                 Brand = updateProductDTO.Brand,
                 CategoryId = updateProductDTO.CategoryId,
             };
