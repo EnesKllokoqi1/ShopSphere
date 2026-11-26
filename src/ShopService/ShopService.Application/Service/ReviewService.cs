@@ -16,17 +16,16 @@ namespace ShopService.Application.Service
         {
             _reviewRepository = reviewRepository;
         }
-        public async Task<ReviewResponseDTO?> CreateReviewAsync(MakeReviewDTO makeReviewDTO)
+        public async Task<ReviewResponseDTO?> CreateReviewAsync(MakeReviewDTO makeReviewDTO,Guid userId)
         {
-            var check = await _reviewRepository.UserAlreadyReviewedProductAsync(makeReviewDTO.UserId, makeReviewDTO.ProductId);
-            if (check)
-            {
-                return null;
-            }
-            var review = MapMakeReviewDTO(makeReviewDTO);
-            var review1 = await _reviewRepository.CreateReviewAsync(review);
-            return MapReviewResponseDTO(review1);
-           
+            var check = await _reviewRepository.UserAlreadyReviewedProductAsync(userId, makeReviewDTO.ProductId);
+            if (check) return null;
+
+            var review = MapMakeReviewDTO(makeReviewDTO, userId);
+            var created = await _reviewRepository.CreateReviewAsync(review);
+            var full = await _reviewRepository.GetReviewByIdAsync(created.Id);
+            return MapReviewResponseDTO(full);
+
         }
 
         public async Task<bool> DeleteReviewAsync(Guid reviewId)
@@ -37,8 +36,15 @@ namespace ShopService.Application.Service
         public Task<IEnumerable<ReviewResponseDTO>> GetAllReviewsAsync(int pageNumber,int pageSize)
         {
             pageNumber = Math.Max(1, pageNumber);
-            pageSize = Math.Clamp(pageSize, 1, 50);
+            pageSize = Math.Clamp(pageSize, 1, 100);
             return _reviewRepository.GetAllReviewsAsync(pageNumber,pageSize);
+        }
+
+        public Task<IEnumerable<ReviewResponseDTO>> GetMyReviewsAsync(Guid userId, int pageNumber, int pageSize)
+        {
+            pageNumber = Math.Max(1, pageNumber);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+            return _reviewRepository.GetMyReviews(userId, pageNumber, pageSize);
         }
 
         public async Task<ReviewResponseDTO?> GetReviewByIdAsync(Guid guid)
@@ -54,7 +60,7 @@ namespace ShopService.Application.Service
         public async  Task<IEnumerable<ReviewResponseDTO>> GetReviewsByUserIdAsync(Guid userId,int pageNumber,int pageSize)
         {
             pageNumber = Math.Max(1, pageNumber);
-            pageSize = Math.Clamp(pageSize, 1, 50);
+            pageSize = Math.Clamp(pageSize, 1, 100);
             return await _reviewRepository.GetReviewsByUserIdAsync(userId,pageNumber,pageSize);
 
         }
@@ -70,24 +76,22 @@ namespace ShopService.Application.Service
             var updatedReview = await _reviewRepository.GetReviewByIdAsync(result.Id);
             return MapReviewResponseDTO(updatedReview);
         }
-        private Review MapMakeReviewDTO(MakeReviewDTO makeReviewDTO)
+        private Review MapMakeReviewDTO(MakeReviewDTO makeReviewDTO, Guid userId) => new Review
         {
-            return new Review
-            {
-                UserId = makeReviewDTO.UserId,
-                ProductId=makeReviewDTO.ProductId,
-                Rating=makeReviewDTO.Rating,
-                Comment=makeReviewDTO.Comment
-            };
-        }
+
+            UserId = userId,
+            ProductId = makeReviewDTO.ProductId,
+            Rating = makeReviewDTO.Rating,
+            Comment = makeReviewDTO.Comment?.Trim() ?? string.Empty
+        };
         private ReviewResponseDTO MapReviewResponseDTO(Review review)
         {
            return new ReviewResponseDTO
             {
                 Id = review.Id,
                 Rating = review.Rating,
-                Comment = review.Comment,
-                CreatedAt = review.CreatedAt,
+                Comment = review.Comment ?? string.Empty,
+               CreatedAt = review.CreatedAt,
                 UserId = review.UserId,
                 UserName = review.User != null ? review.User.FirstName : string.Empty,
                 ProductId = review.ProductId,

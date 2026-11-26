@@ -9,10 +9,11 @@ namespace ShopService.Application.Interfaces
 {
     public interface IReviewService
     {
-        Task<ReviewResponseDTO?> CreateReviewAsync(MakeReviewDTO makeReviewDTO);
+        Task<ReviewResponseDTO?> CreateReviewAsync(MakeReviewDTO makeReviewDTO,Guid userId);
         Task<ReviewResponseDTO?> UpdateReviewAsync(UpdateReviewDTO updateReviewDTO,Guid reviewId);
         Task<bool> DeleteReviewAsync(Guid reviewId);
         Task<IEnumerable<ReviewResponseDTO>> GetAllReviewsAsync(int pageNumber,int pageSize);
+        Task<IEnumerable<ReviewResponseDTO>> GetMyReviewsAsync(Guid userId,int pageNumber, int pageSize);
         Task<ReviewResponseDTO?> GetReviewByIdAsync(Guid guid);
         Task<IEnumerable<ReviewResponseDTO>> GetReviewsByUserIdAsync(Guid userId,int pageNumber,int pageSize);
     }

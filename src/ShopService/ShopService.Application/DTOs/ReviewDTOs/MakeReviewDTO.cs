@@ -9,9 +9,6 @@ namespace ShopService.Application.DTOs.ReviewDTOs
 {
     public class MakeReviewDTO
     {
-        [Required(ErrorMessage = "User ID is required")]
-        public Guid? UserId { get; set; }
-
         [Required(ErrorMessage = "Product ID is required")]
         public Guid? ProductId { get; set; }
 

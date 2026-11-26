@@ -1,15 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using ShopService.Application.DTOs.CategoryDTOs;
 using ShopService.Application.DTOs.ReviewDTOs;
 using ShopService.Application.Interfaces;
 using ShopService.Domain.Entities;
 using ShopService.Infrastructure.Data;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ShopService.Infrastructure.Repositories
 {
@@ -42,17 +36,14 @@ namespace ShopService.Infrastructure.Repositories
 
         public async Task<IEnumerable<ReviewResponseDTO>> GetAllReviewsAsync(int pageNumber = 1, int pageSize = 10)
         {
-            pageNumber = Math.Max(1, pageNumber);
-            pageSize = Math.Clamp(pageSize, 1, 100); 
             return await _appDbContext.Reviews
-                .AsNoTracking()
-                .Include(r => r.User)
-                .Include(r => r.Product)
-                .OrderBy(r => r.CreatedAt)
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .Select(MapToReviewResponseDTO())
-                .ToListAsync();
+             .AsNoTracking()
+             .OrderBy(r => r.CreatedAt)
+             .ThenBy(r => r.Id)
+             .Skip((pageNumber - 1) * pageSize)
+             .Take(pageSize)
+             .Select(MapToReviewResponseDTO())
+             .ToListAsync();
         }
         private static Expression<Func<Review, ReviewResponseDTO>> MapToReviewResponseDTO()
         {
@@ -80,13 +71,14 @@ namespace ShopService.Infrastructure.Repositories
 
         public async Task<IEnumerable<ReviewResponseDTO>> GetReviewsByUserIdAsync(Guid userId,int pageNumber=1,int pageSize=10)
         {
-            pageNumber = Math.Max(1, pageNumber);
-            pageSize = Math.Clamp(pageSize, 1, 100);
             return await _appDbContext.Reviews.AsNoTracking()
                  .Where(e => e.UserId == userId)
                  .OrderBy(r => r.CreatedAt)
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize).Select(MapToReviewResponseDTO()).ToListAsync();
+                 .ThenBy(r => r.Id)
+                 .Skip((pageNumber - 1) * pageSize)
+                 .Take(pageSize)
+                 .Select(MapToReviewResponseDTO())
+                 .ToListAsync();
         }
 
         public async Task<Review?> UpdateReviewAsync(Review updatedReview, Guid reviewId)
@@ -97,7 +89,7 @@ namespace ShopService.Infrastructure.Repositories
                 return null;
             }
             review.Rating = updatedReview.Rating;
-            review.Comment = updatedReview.Comment;
+            review.Comment = updatedReview.Comment?.Trim() ?? string.Empty;
             await _appDbContext.SaveChangesAsync();
             return review;
         }
@@ -106,6 +98,21 @@ namespace ShopService.Infrastructure.Repositories
         {
             return await _appDbContext.Reviews
          .AnyAsync(r => r.UserId == userId && r.ProductId == productId);
+        }
+
+        public async Task<IEnumerable<ReviewResponseDTO>> GetMyReviews(Guid userId, int pageNumber = 1, int pageSize = 10)
+        {
+            var reviews = await _appDbContext.Reviews
+                .AsNoTracking()
+                .Where(e => e.UserId == userId)
+                .OrderBy(r => r.CreatedAt)
+                .ThenBy(r => r.Id)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(MapToReviewResponseDTO())
+                .ToListAsync();
+            return reviews;
+
         }
     }
 }
