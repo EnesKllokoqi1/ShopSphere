@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShopService.Application.DTOs.ReviewDTOs;
 using ShopService.Application.Interfaces;
 using ShopService.Domain.Entities;
+using System.Security.Claims;
 
 namespace ShopService.API.Controllers
 {
@@ -16,11 +17,18 @@ namespace ShopService.API.Controllers
         {
             _reviewService = reviewService;
         }
+        private Guid? GetCurrentUserId() =>
+        Guid.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : null;
         [Authorize]
         [HttpPost]
         public async Task<ActionResult<ReviewResponseDTO>> MakeReview([FromBody] MakeReviewDTO makeReviewDTO)
         {
-            var review = await _reviewService.CreateReviewAsync(makeReviewDTO);
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
+            var review = await _reviewService.CreateReviewAsync(makeReviewDTO,userId.Value);
             if (review is null)
             {
                 return BadRequest(new
@@ -43,26 +51,38 @@ namespace ShopService.API.Controllers
                 }
             );
         }
+
         [Authorize]
         [HttpDelete("{reviewId:guid}")]
         public async Task<ActionResult> DeleteReview([FromRoute] Guid reviewId)
         {
+
+            var userId = GetCurrentUserId();
+            if (userId is null)
+                return Unauthorized(new { Message = "Authentication is required." });
+
+            var existing = await _reviewService.GetReviewByIdAsync(reviewId);
+            if (existing is null)
+                return NotFound(new { Status = "error", Message = $"Review with ID '{reviewId}' was not found." });
+
+            if (existing.UserId != userId.Value)
+                return StatusCode(403, new { Status = "error", Message = "You can only delete your own reviews." });
+
             var isDeleted = await _reviewService.DeleteReviewAsync(reviewId);
             if (!isDeleted)
-            {
-                return NotFound(new
-                {
-                    Status = "error",
-                    Message = $"Review with ID '{reviewId}' was not found.",
-                    Timestamp = DateTime.UtcNow
-                });
-            }
+                return NotFound(new { Status = "error", Message = $"Review with ID '{reviewId}' was not found." });
+
             return NoContent();
         }
         [Authorize]
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ReviewResponseDTO>>> GetAllReviews( [FromQuery] int pageNumber = 1,[FromQuery] int pageSize = 10)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
             var reviews = await _reviewService.GetAllReviewsAsync(pageNumber, pageSize);
             return Ok(new
             {
@@ -81,6 +101,11 @@ namespace ShopService.API.Controllers
         [HttpGet("{reviewId:guid}")]
         public async Task<ActionResult<ReviewResponseDTO>> GetReviewById([FromRoute] Guid reviewId)
         {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+            {
+                return Unauthorized(new { Message = "Authentication is required." });
+            }
             var review = await _reviewService.GetReviewByIdAsync(reviewId);
             if (review is null)
             {
@@ -115,26 +140,45 @@ namespace ShopService.API.Controllers
             });
         }
         [Authorize]
-        [HttpPut("{reviewId:guid}")]
-        public async Task<ActionResult<ReviewResponseDTO>> UpdateReview([FromBody] UpdateReviewDTO updateReviewDTO, [FromRoute] Guid reviewId)
+        [HttpGet("me")]
+        public async Task<ActionResult<IEnumerable<ReviewResponseDTO>>> GetMyReviews([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
-            var review = await _reviewService.UpdateReviewAsync(updateReviewDTO, reviewId);
-            if (review is null)
+            var userId = GetCurrentUserId();
+            if (userId is null)
             {
-                return NotFound(new
-                {
-                    Status = "error",
-                    Message = $"Review with ID '{reviewId}' was not found. Update failed.",
-                    Timestamp = DateTime.UtcNow
-                });
+                return Unauthorized(new { Message = "Authentication is required." });
             }
+            var reviews = await _reviewService.GetMyReviewsAsync(userId.Value, pageNumber, pageSize);
             return Ok(new
             {
                 Status = "success",
-                Message = "Review updated successfully.",
-                Data = review,
+                Message = reviews.Any()
+                    ? $"Retrieved {reviews.Count()} reviews for user ID '{userId}'."
+                    : $"No reviews found for user ID '{userId}'.",
+                Data = reviews,
                 Timestamp = DateTime.UtcNow
             });
+        }
+        [Authorize]
+        [HttpPut("{reviewId:guid}")]
+        public async Task<ActionResult<ReviewResponseDTO>> UpdateReview([FromBody] UpdateReviewDTO updateReviewDTO, [FromRoute] Guid reviewId)
+        {
+            var userId = GetCurrentUserId();
+            if (userId is null)
+                return Unauthorized(new { Message = "Authentication is required." });
+
+            var existing = await _reviewService.GetReviewByIdAsync(reviewId);
+            if (existing is null)
+                return NotFound(new { Status = "error", Message = $"Review with ID '{reviewId}' was not found." });
+
+            if (existing.UserId != userId.Value)
+                return StatusCode(403, new { Status = "error", Message = "You can only edit your own reviews." });
+
+            var review = await _reviewService.UpdateReviewAsync(updateReviewDTO, reviewId);
+            if (review is null)
+                return NotFound(new { Status = "error", Message = $"Review with ID '{reviewId}' was not found. Update failed." });
+
+            return Ok(new { Status = "success", Message = "Review updated successfully.", Data = review, Timestamp = DateTime.UtcNow });
         }
     }
 }
